@@ -4,49 +4,18 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 
 #define LOCAL_SERVER_PORT 1500
 #define TAM_MENSAGEM 1024
 
-typedef struct{
-    char nome_arquivo[30];
-    char ip_cliente[20];
-}arquivos;
-
-void adicionaArquivos(){
-
-    FILE *banco_de_dados;
-    int quantidade, quantidade_arquivos_existentes = 0;
-    char *nome_arquivo, *ip_cliente;
-    arquivos arquivo;
-
-    banco_de_dados = fopen("banco_de_dados.txt", "ab+");
-    fread(&quantidade_arquivos_existentes, sizeof(int), 1, banco_de_dados);
-
-    printf("Digite a quantidade de arquivos que deseja adicionar: ");
-    scanf("%d", &quantidade);
-    quantidade_arquivos_existentes += quantidade;
-
-    for(int i=0; i<quantidade; i++){
-
-        printf("\n");
-        printf("Digite o nome do arquivo: ");
-        scanf("%s", arquivo.nome_arquivo);
-        strcpy(arquivo.ip_cliente, "127.0.0.1");
-        fwrite(&arquivo, sizeof(arquivos), 1, banco_de_dados);
-    }
-
-    fclose(banco_de_dados);
-    printf("Arquivo(s) adicionados com sucesso!\n");
-}
-
 int main(int argc, char *argv[]) {
   
-    int opcao, quantidade_arquivos, sd, rc, n, cliLen;
+    int opcao, flag = 0, sd, rc, n, cliLen;
     struct sockaddr_in cliAddr, servAddr;
-    char msg[TAM_MENSAGEM], ip_cliente[16], nome_arquivo[30];
+    char msg[TAM_MENSAGEM], encontrado[TAM_MENSAGEM], nome_arquivo[30], ip_cliente[20];
 
     FILE *banco_de_dados;
 
@@ -61,30 +30,6 @@ int main(int argc, char *argv[]) {
     }
 
     fseek(banco_de_dados, 0, SEEK_SET); // goto begin of file
-
-    while( (fscanf(banco_de_dados, "%s %s\n", &nome_arquivo, &ip_cliente)) != EOF)    {
-
-        printf("O arquivo '%s' foi encontrado no cliente %s\n", nome_arquivo,   ip_cliente);
-
-    }
-    /*
-    printf("Deseja adicionar novos arquivos no servidor?\n");
-    printf("1-Sim ou 2-Não\n");
-    printf("Digite a opção desejada: ");
-    scanf("%d", &opcao);
-    
-    do{
-        printf("\n");
-        printf("Por favor, digite uma opção válida!\n");
-        printf("Digite a opção desejada: ");
-        scanf("%d", &opcao);
-
-    }while(opcao < 1 || opcao >= 3);
-
-    if(opcao == 1){
-        adicionaArquivos();
-    }
-    */
 
     /* socket creation */
     sd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -104,8 +49,7 @@ int main(int argc, char *argv[]) {
         //exit(1);
     }
 
-    printf("%s: waiting for data on port UDP %u\n", 
-        argv[0],LOCAL_SERVER_PORT);
+    printf("%s: waiting for data on port UDP %u\n", argv[0],LOCAL_SERVER_PORT);
 
     /* server infinite loop */
     while(1) {
@@ -124,12 +68,29 @@ int main(int argc, char *argv[]) {
         }
         
         /* print received message */
-        printf("%s: from %s:UDP%u : %s \n", 
-        argv[0],inet_ntoa(cliAddr.sin_addr),
-        ntohs(cliAddr.sin_port),msg);
-        
+        printf("%s: from %s:UDP%u : %s \n", argv[0], inet_ntoa(cliAddr.sin_addr), ntohs(cliAddr.sin_port), msg);
+
+        char ip_cliente[16], nome_arquivo[30];
+        int flag = 0;
+
+        while((fscanf(banco_de_dados, "%s %s\n", &nome_arquivo, &ip_cliente)) != EOF){
+
+            if((strcmp(nome_arquivo, msg))== 0){
+                strcpy(encontrado, ip_cliente);
+                flag = 1;
+            }
+            
+        }
+
+        if(flag == 0){
+            printf("Arquivo não encontrado!\n");
+            exit(1);
+        }
+            printf("%s\n", encontrado);
+            
     }/* end of server infinite loop */
 
+    fclose(banco_de_dados);
     return 0;
 
 }
