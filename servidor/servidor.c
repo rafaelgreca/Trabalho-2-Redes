@@ -28,7 +28,7 @@ int main(){
         printf("Não foi possível alocar memória para o buffer!\n");
     }
 
-    FILE *banco_de_dados;
+    FILE *banco_de_dados, *banco_de_dados_aux;
 
     //Abre o arquivo do banco de dados
     banco_de_dados = fopen("banco_de_dados.txt", "rb");
@@ -141,7 +141,8 @@ int main(){
         memset(&blk,0x0, sizeof(bloco));
         memset(buffer,'\0', tam_buffer);
 
-        banco_de_dados = fopen("banco_de_dados.txt", "rb+");
+        banco_de_dados = fopen("banco_de_dados.txt", "r+");
+        banco_de_dados_aux = fopen("banco_de_dados1.txt", "w+");
 
         if(!banco_de_dados){
             printf("Nao foi possivel abrir o arquivo do bando de dados!\n");
@@ -167,36 +168,45 @@ int main(){
         //atualiza o banco de dados
 
         int posicao_arquivo = 0;
+        fseek(banco_de_dados, 0, SEEK_SET);
 
         //procura o arquivo no banco de dados
         while((fscanf(banco_de_dados, "%s %s\n", nome_arquivo, ip_cliente)) != EOF){
 
-            posicao_arquivo++;
+            //posicao_arquivo++;
+
+            printf("%s %s\n", nome_arquivo, ip_cliente);
 
             //atualiza a linha do arquivo no banco de dados
             if((strcmp(nome_arquivo, blk.nome_arquivo))== 0){
                 
                 break;
                 //strcpy(ip_cliente, blk.porta_cliente);
-                //fprintf(banco_de_dados, "%s %d\n", blk.nome_arquivo, blk.porta_cliente);
+                //fprintf(banco_de_dados_aux, "%s %d\n", nome_arquivo, blk.porta_cliente);
+            }else{
+                //fprintf(banco_de_dados_aux, "%s %s\n", nome_arquivo, ip_cliente);
             }
                 
         }
 
+        
         fflush(banco_de_dados);
-
+        /*
         //move o arquivo para a linha onde está o nome do arquivo
         fseek(banco_de_dados, posicao_arquivo, SEEK_SET);
 
-        printf("%s %d\n", blk.nome_arquivo, blk.porta_cliente);
+        printf("%s %d %d\n", blk.nome_arquivo, blk.porta_cliente, posicao_arquivo);
         
         //reescreve a linha com a porta atualizada do cliente A
-        fprintf(banco_de_dados, "%s %d\n", blk.nome_arquivo, blk.porta_cliente);
+        //fprintf(banco_de_dados, "%s %d\n", blk.nome_arquivo, blk.porta_cliente);
+        
+        fwrite(&blk, 1, sizeof(blk), banco_de_dados);
 
         fflush(banco_de_dados); 
 
         printf("\nBanco de dados atualizado com sucesso!\n");
         fclose(banco_de_dados);
+        */
         break;
     }
 }

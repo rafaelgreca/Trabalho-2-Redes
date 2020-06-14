@@ -24,15 +24,43 @@ typedef struct bloco{
     char nome_arquivo[30];
 } bloco;
 
+long int checksum(char segmento[],int dimensao){
+	long int soma;
+	int asc,i;
+
+	//Inicializar variavel que armazena a soma
+	soma = 0;
+
+	//Percorrer cadeia de caracteres
+	for(i=0 ; i<dimensao ; i++){
+		asc = 0;
+		asc = (int) segmento[i];		//Obter valor int correspondente ao byte
+		if(asc >= 100 || asc <= -100)
+			asc	= asc/20;				//Representar o bytepor seu valor dividido por 20
+		else
+			asc = asc/5;				//Representar o byte por seu valor dividido por 5
+
+		soma += asc*i;					//Adicionar valor do byte na soma
+	}
+
+	//Devolver valor total do checksum
+	return soma;
+}
+
 int receberArquivo(int sd, struct sockaddr_in addr_cliente, socklen_t addr_tam, char nomearq[]){
 
     pacote pkt;
     FILE *arquivo_transferido;
-    char *buffer, ack[] = "ack", *aux;
+    char *buffer, *ack, *aux;
     int contador_pacote = 0;
 
     buffer = (char *) malloc(tam_buffer * sizeof(char));
     aux = (char *) malloc(tam_buffer * sizeof(char));
+    ack = (char *) malloc(tam_buffer * sizeof(char));
+
+    if(!aux){
+        printf("Nao foi possivel alocar memoria para o buffer!\n");
+    }
 
     if(!buffer){
         printf("Nao foi possivel alocar memoria para o buffer!\n");
@@ -47,11 +75,15 @@ int receberArquivo(int sd, struct sockaddr_in addr_cliente, socklen_t addr_tam, 
 
     while(1){
         
-        memset(&pkt, 0x0, sizeof(pkt));
+        memset(&pkt, 0x0, sizeof(pacote));
         
-        if ((recvfrom(sd, &pkt, sizeof(pacote), 0, (struct sockaddr *) &addr_cliente, &addr_tam)) < 0){
+        if ((recvfrom(sd, &pkt, sizeof(pkt), 0, (struct sockaddr *) &addr_cliente, &addr_tam)) < 0){
             printf("Nao foi possivel receber mensagens do cliente B!\n");
             return -1;
+        }
+
+        if(pkt.tam == 0){
+            break;
         }
 
         fwrite(pkt.segmento, 1, pkt.tam, arquivo_transferido);
@@ -59,6 +91,7 @@ int receberArquivo(int sd, struct sockaddr_in addr_cliente, socklen_t addr_tam, 
 
         printf("\nPacote %d recebido!\nNumero sequencia: %d\nChecksum: %li\nTamanho: %d\n", contador_pacote, pkt.numseq, pkt.check_sum, pkt.tam);
         sprintf(aux, "%d", pkt.numseq);
+        strcpy(ack, "ack");
         strcat(ack, aux);
         strcpy(buffer, ack);
 
@@ -67,11 +100,9 @@ int receberArquivo(int sd, struct sockaddr_in addr_cliente, socklen_t addr_tam, 
             return -1;
         }
 
+        //reseta a variável de ack
         strcpy(ack, "ack");
         
-        if(pkt.tam == 0){
-            break;
-        }
     }
 
     fclose(arquivo_transferido);
@@ -104,7 +135,7 @@ int avisaServidor(int sd, struct sockaddr_in addr_servidor, socklen_t addr_tam, 
     printf("\nMensagem enviada com sucesso!\n");
     printf("Aguardando a resposta do servidor...\n");
 
-    if (recvfrom(sd, buffer, sizeof(buffer), 0 ,(struct sockaddr *) &addr_servidor, &addr_tam) < 0){
+    if (recvfrom(sd, buffer, sizeof(buffer)+1, 0 ,(struct sockaddr *) &addr_servidor, &addr_tam) < 0){
         printf("Erro ao tentar receber a mensagem de confirmacao do servidor!\n");
         return -1;
     }

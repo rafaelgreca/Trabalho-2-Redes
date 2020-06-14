@@ -54,7 +54,7 @@ int enviaPacote(char *mensagem, FILE *arquivo, int sd, struct sockaddr_in addr_c
         printf("Nao foi possivel alocar memoria para o buffer!\n");
         return -1;
     }
-
+    
     memset(&pkt, 0x0, sizeof(pkt));
 
     while(!feof(arquivo)){
@@ -63,10 +63,10 @@ int enviaPacote(char *mensagem, FILE *arquivo, int sd, struct sockaddr_in addr_c
         num_seq++;
 
         printf("\nEnviando o pacote %d de numero de sequencia %d. Por favor, aguarde...\n", contador_pacote, num_seq);
-        tam = fread(mensagem, 1, 256, arquivo);
+        tam = fread(pkt.segmento, 1, 256, arquivo);
 
         pkt.tam = tam;
-        strcpy(pkt.segmento, mensagem);
+        //strcpy(pkt.segmento, mensagem);
         pkt.flag = 1;
         pkt.numseq = num_seq;
         pkt.check_sum = checksum(pkt.segmento, pkt.tam);
@@ -138,7 +138,7 @@ int main(){
         
         addr_tam = sizeof(addr_cliente);
 
-        if ((recvfrom(sd, buffer, tam_buffer, 0, (struct sockaddr *) &addr_cliente, &addr_tam)) < 0){
+        if ((recvfrom(sd, buffer, tam_buffer+1, 0, (struct sockaddr *) &addr_cliente, &addr_tam)) < 0){
             printf("Erro ao tentar receber mensagens do cliente A!\n");
             return -1;
         }
@@ -156,7 +156,7 @@ int main(){
 
                 strcpy(buffer,"Erro");
                 
-                if (sendto(sd, buffer, strlen(buffer) , 0 , (struct sockaddr *) &addr_cliente, addr_tam) < 0){
+                if (sendto(sd, buffer, strlen(buffer)+1 , 0 , (struct sockaddr *) &addr_cliente, addr_tam) < 0){
                     printf("Erro ao enviar a mensagem para o cliente A!\n");
                     return -1;
                 }
@@ -167,7 +167,7 @@ int main(){
                 
                 strcpy(buffer, "Transferindo");
 
-                if(sendto(sd, buffer, strlen(buffer) , 0 , (struct sockaddr *) &addr_cliente, addr_tam) < 0){
+                if(sendto(sd, buffer, strlen(buffer)+1 , 0 , (struct sockaddr *) &addr_cliente, addr_tam) < 0){
                    printf("Erro ao enviar a mensagem para o cliente A!\n");
                    return -1;
                 }

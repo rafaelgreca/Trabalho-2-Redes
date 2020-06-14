@@ -1,1 +1,3 @@
 teste.txt 127.0.0.1
+unifei.jpg 127.0.0.1
+rhc-snow-hey-oh.mp3 127.0.0.1
