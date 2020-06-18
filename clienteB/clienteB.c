@@ -1,3 +1,7 @@
+/*
+Rafael Greca Vieira - 2018000434
+*/
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -9,46 +13,43 @@
 #include <string.h>
 
 #define porta_servidor 1500
-#define tam_buffer 1024
+#define tamanho_buffer 1024
+#define porta_clienteb 1502
+#define porta_clientea 1501
 
+//estrutura do pacote
 typedef struct pacote{
-	int numseq;     				//Armazena o numero sequencial, identificador do pacote
-	long int check_sum;				//Armazena o checksum do pacote
-	char segmento[256];				//Armazena um segmento do arquivo que sera enviado
-	int flag;						//Valor 1 = CONTINUAR | valor 0 = FINALIZAR
-	int tam;
+	int numseq;     	        //número de sequência do pacote			
+	long int check_sum;			//valor do checksum do pacote	
+	char segmento[512];			//segmento do pacote
+	int tam;                    //tamanho do pacote
 } pacote;
 
-long int checksum(char segmento[],int dimensao){
-	long int soma;
-	int asc,i;
+//função responsável por realizar o checksum
+long int checksum(char segmento[], int tamanho){
 
-	//Inicializar variavel que armazena a soma
-	soma = 0;
+	long int checksum = 0;
 
-	//Percorrer cadeia de caracteres
-	for(i=0 ; i<dimensao ; i++){
-		asc = 0;
-		asc = (int) segmento[i];		//Obter valor int correspondente ao byte
-		if(asc >= 100 || asc <= -100)
-			asc	= asc/20;				//Representar o bytepor seu valor dividido por 20
-		else
-			asc = asc/5;				//Representar o byte por seu valor dividido por 5
-
-		soma += asc*i;					//Adicionar valor do byte na soma
+	//percorrer o tamanho do segmento
+	for(int i=0; i<tamanho; i++){
+		
+        //converte pra inteiro o caracter e soma
+        checksum += (int) (segmento[i]);
 	}
 
-	//Devolver valor total do checksum
-	return soma;
+    //retorna o valor do checksum
+	return checksum;
 }
 
+//função responsável por transferir o arquivo para o cliente A
 int enviaPacote(char *mensagem, FILE *arquivo, int sd, struct sockaddr_in addr_cliente, socklen_t addr_tam){
 
     int tam = 0, contador_pacote = 0, num_seq = 0;
     char *buffer;
-    pacote pkt, pkt2;
+    pacote pkt;
 
-    buffer = (char *) malloc(tam_buffer * sizeof(buffer));
+    //aloca memória para o buffer
+    buffer = (char *) malloc(tamanho_buffer * sizeof(buffer));
 
     if(!buffer){
         printf("Nao foi possivel alocar memoria para o buffer!\n");
@@ -57,52 +58,62 @@ int enviaPacote(char *mensagem, FILE *arquivo, int sd, struct sockaddr_in addr_c
     
     memset(&pkt, 0x0, sizeof(pkt));
 
+    //enquanto o arquivo não acabar
     while(!feof(arquivo)){
         
         contador_pacote++;
         num_seq++;
 
         printf("\nEnviando o pacote %d de numero de sequencia %d. Por favor, aguarde...\n", contador_pacote, num_seq);
-        tam = fread(pkt.segmento, 1, 256, arquivo);
+        
+        //le 512 bytes do arquivo
+        tam = fread(pkt.segmento, 1, 512, arquivo);
 
         pkt.tam = tam;
         //strcpy(pkt.segmento, mensagem);
-        pkt.flag = 1;
         pkt.numseq = num_seq;
         pkt.check_sum = checksum(pkt.segmento, pkt.tam);
 
+        //envia o pacote para o cliente A
         if(sendto(sd, &pkt, sizeof(pkt)+1, 0, (struct sockaddr *) &addr_cliente, addr_tam) < 0){
             printf("Falha ao enviar o pacote de numero de sequencia = %d!\n", num_seq);
+            return -1;
         }
 
+        //recebe a mensagem de ack (confirmação de que recebeu o pacote) do cliente A
         if(recvfrom(sd, buffer, sizeof(buffer)+1, 0, (struct sockaddr *) &addr_cliente, &addr_tam) < 0){
             printf("Erro ao receber ack do cliente A!\n");
+            return -1;
         }
 
         printf("%s recebido do cliente A!\n", buffer);
     }
 
+    //depois que termina o arquivo, envia um pacote final com tamanho igual a zero
+    //indicando para o cliente A que a transferência do arquivo acabou
     pkt.tam = 0;
     strcpy(pkt.segmento, "");
-    pkt.flag = 0;
     pkt.numseq = 0;
     pkt.check_sum = 0;
 
+    //envia o pacote final para o cliente A
     if(sendto(sd, &pkt, sizeof(pkt)+1, 0, (struct sockaddr *) &addr_cliente, addr_tam) < 0){
         printf("Erro ao tentar enviar o pacote final de confirmacao!\n");
+        return -1;
     }
 }
 
 int main(){
 
+    //variáveis
     int sd;
     struct sockaddr_in addr_cliente;
-    int rec_msg_tam,status,pkt_cont,msg_tam,er;
-    char *buffer,ch_ree,*buffer_recv;
+    char *buffer;
     socklen_t addr_tam;
     FILE *arquivo_cliente;
 
-    buffer = (char*) malloc(tam_buffer * sizeof(char));
+    //aloca memória para o buffer
+    buffer = (char*) malloc(tamanho_buffer * sizeof(char));
 
     if(!buffer){
         printf("Não foi possível alocar memória para o buffer!\n");
@@ -115,9 +126,10 @@ int main(){
         return -1;
     }
     
+    //dados do socket do cliente
     memset(&addr_cliente, 0, sizeof(addr_cliente));
     addr_cliente.sin_family = AF_INET;
-    addr_cliente.sin_port = htons(10334);
+    addr_cliente.sin_port = htons(porta_clienteb);
     addr_cliente.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     // bind no socket
@@ -130,15 +142,16 @@ int main(){
     listen(sd, 1);
 
     printf("Aguardando solicitações...\n");
-    //ch_ree='1';
-    
+
+    //---------COMUNICAÇÃO COM O CLIENTE A---------
     while(1){
 
-        memset(buffer, '\0', tam_buffer);
+        memset(buffer, '\0', tamanho_buffer);
         
         addr_tam = sizeof(addr_cliente);
 
-        if ((recvfrom(sd, buffer, tam_buffer+1, 0, (struct sockaddr *) &addr_cliente, &addr_tam)) < 0){
+        //recebe a mensagem requisitando o arquivo do cliente A e armazena no buffer
+        if ((recvfrom(sd, buffer, tamanho_buffer+1, 0, (struct sockaddr *) &addr_cliente, &addr_tam)) < 0){
             printf("Erro ao tentar receber mensagens do cliente A!\n");
             return -1;
         }
@@ -172,14 +185,16 @@ int main(){
                    return -1;
                 }
 
+                //aloca memória para a msg
                 char *msg;
 
-                msg = (char *) malloc(256 * sizeof(char));
+                msg = (char *) malloc(512 * sizeof(char));
 
                 if(!msg){
                     printf("Nao foi possivel alocar memoria para a mensagem\n");
                 }
 
+                //função responsável por montar os pacotes e enviar para o cliente A
                 enviaPacote(msg, arquivo_cliente, sd, addr_cliente, addr_tam);
            }
 

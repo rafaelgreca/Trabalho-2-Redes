@@ -1,3 +1,7 @@
+/*
+Rafael Greca Vieira - 2018000434
+*/
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -8,27 +12,33 @@
 #include <unistd.h>
 #include <string.h>
 
-#define serv_porta 1500
-#define tam_buffer 1024
+#define porta_servidor 1500
+#define tamanho_buffer 1024
+#define porta_clienteb 1502
+#define porta_clientea 1501
 
+//estrutura do bloco de resposta do cliente A pro servidor
 typedef struct bloco{
-    int porta_cliente;
-    char nome_arquivo[30];
+    int porta_cliente;          //porta do cliente que possui o pacote
+    char nome_arquivo[30];      //nome do arquivo que ele possui
 } bloco;
 
 int main(){
     
-    int sd, flag;
+    //variáveis
+    int sd, flag = 0;
     socklen_t cliente_tam;
     struct sockaddr_in addr_servidor, addr_cliente;
-    char *buffer, nome_arquivo[30], ip_cliente[20], ip_cliente_arquivo[20];
-    buffer = (char*) malloc(tam_buffer * sizeof(char));
+    char *buffer, nome_arquivo[30], porta_cliente[7], porta_cliente_arquivo[7];
+    
+    buffer = (char*) malloc(tamanho_buffer * sizeof(char));
 
+    //aloca memória para o buffer
     if(!buffer){
         printf("Não foi possível alocar memória para o buffer!\n");
     }
 
-    FILE *banco_de_dados, *banco_de_dados_aux;
+    FILE *banco_de_dados;
 
     //Abre o arquivo do banco de dados
     banco_de_dados = fopen("banco_de_dados.txt", "rb");
@@ -43,8 +53,8 @@ int main(){
     //Dados do socket do servidor
     memset(&addr_servidor, 0, sizeof(addr_servidor));
     addr_servidor.sin_family = AF_INET;
-    addr_servidor.sin_port = htons(serv_porta);
-    addr_servidor.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr_servidor.sin_port = htons(porta_servidor);
+    addr_servidor.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     //Bind no socket
     if(bind(sd,(struct sockaddr *)&addr_servidor , sizeof(addr_servidor))<0){
@@ -52,23 +62,25 @@ int main(){
         return -1;
     }
 
-    ///aguardando conexoes
+    //Aguardando as conexoes
     listen(sd, 2);
     printf("Aguardando transições...\n");
     
+    //---------COMUNICAÇÃO COM O CLIENTE A---------
     while(1){
         
-        memset(buffer,'\0', tam_buffer);
+        memset(buffer,'\0', tamanho_buffer);
         
         cliente_tam = sizeof(addr_cliente);
         
-        if ((recvfrom(sd, buffer, tam_buffer, 0, (struct sockaddr *) &addr_cliente, &cliente_tam)) < 0){
+        //recebe a mensagem do cliente A e armazena no buffer
+        if ((recvfrom(sd, buffer, tamanho_buffer, 0, (struct sockaddr *) &addr_cliente, &cliente_tam)) < 0){
             printf("Erro em receber a mensagem do cliente!\n");
             return -1;
         }
 
         //se o buffer não for vazio, quer dizer que ele recebeu o nome do arquivo do clienteA
-        if(buffer[0]!='\0'){
+        if(buffer[0] != '\0'){
             
             //vai para o final do arquivo de banco de dados
             fseek(banco_de_dados, 0, SEEK_END);
@@ -77,7 +89,8 @@ int main(){
             if (ftell(banco_de_dados) == 0){
                 printf("Banco de dados vazio!\n");
                 printf("Por favor, insira os arquivos manualmente no arquivo txt!\n");
-                printf("Formato: NOMEDOARQUIVO IP_CLIENTE_QUE_POSSUI_ARQUIVO");
+                printf("Formato: NOMEDOARQUIVO PORTA_CLIENTE_QUE_POSSUI_ARQUIVO\n");
+                printf("Exemplo: teste.txt 10309\n");
                 return -1;
             }
 
@@ -85,32 +98,35 @@ int main(){
             fseek(banco_de_dados, 0, SEEK_SET);
 
             //procura o arquivo no banco de dados
-            while((fscanf(banco_de_dados, "%s %s\n", nome_arquivo, ip_cliente)) != EOF){
+            while((fscanf(banco_de_dados, "%s %s\n", nome_arquivo, porta_cliente)) != EOF){
 
+                //arquivo foi encontrado, então salva o ip do cliente
                 if((strcmp(nome_arquivo, buffer))== 0){
-                    strcpy(ip_cliente_arquivo, ip_cliente);
+                    strcpy(porta_cliente_arquivo, porta_cliente);
                     flag = 1;
                 }
                 
             }
 
-            memset(buffer,'\0', tam_buffer);
+            memset(buffer,'\0', tamanho_buffer);
             
             //se o arquivo requisitado pelo clienteA estiver no banco de dados
             if(flag == 1){
                 
                 buffer[0] = '1';
 
-                strcat(buffer,ip_cliente_arquivo);
+                //copia a porta do cliente para o buffer
+                strcat(buffer,porta_cliente_arquivo);
                 
-                printf("Arquivo encontrado no IP: %s\n", ip_cliente_arquivo);
+                printf("Arquivo encontrado na porta: %s\n", porta_cliente_arquivo);
 
+                //envia a porta do cliente que possui o arquivo para o cliente A
                 if (sendto(sd, buffer, strlen(buffer), 0, (struct sockaddr *) &addr_cliente, cliente_tam) < 0){
                     printf("Erro ao enviar a mensagem pro cliente!\n");
                     return -1;
                 }
 
-                printf("IP do cliente que possui o arquivo enviado com sucesso\n");
+                printf("Porta do cliente que possui o arquivo enviado com sucesso\n");
 
             }
             else{
@@ -119,6 +135,7 @@ int main(){
                 char error[] = "Erro";
                 strcat(buffer, error);
 
+                //envia a mensagem de erro (armazenada no buffer) para o cliente A
                 if (sendto(sd, buffer, strlen(buffer) , 0 , (struct sockaddr *) &addr_cliente, cliente_tam) < 0){
                     printf("Erro ao enviar a mensagem pro cliente!\n");
                 }
@@ -132,6 +149,7 @@ int main(){
         break;
     }
 
+    //---------ATUALIZAÇÃO DO BANCO DE DADOS---------
     //atualiza o banco de dados com a porta do cliente que recebeu o arquivo
     bloco blk;
 
@@ -139,16 +157,17 @@ int main(){
 
         FILE *banco_de_dados;
         memset(&blk,0x0, sizeof(bloco));
-        memset(buffer,'\0', tam_buffer);
+        memset(buffer,'\0', tamanho_buffer);
 
-        banco_de_dados = fopen("banco_de_dados.txt", "r+");
-        banco_de_dados_aux = fopen("banco_de_dados1.txt", "w+");
+        banco_de_dados = fopen("banco_de_dados.txt", "a+");
 
+        //erro ao tentar abrir o banco de dados
         if(!banco_de_dados){
             printf("Nao foi possivel abrir o arquivo do bando de dados!\n");
             return -1;
         }
 
+        //recebe o bloco de resposta do cliente A
         if ((recvfrom(sd, &blk, sizeof(blk), 0, (struct sockaddr *) &addr_cliente, &cliente_tam)) < 0){
             printf("Erro em receber a mensagem do cliente A!\n");
             return -1;
@@ -167,46 +186,15 @@ int main(){
 
         //atualiza o banco de dados
 
-        int posicao_arquivo = 0;
-        fseek(banco_de_dados, 0, SEEK_SET);
+        //escreve no arquivo
+        fprintf(banco_de_dados, "\n%s %d", blk.nome_arquivo, blk.porta_cliente);
 
-        //procura o arquivo no banco de dados
-        while((fscanf(banco_de_dados, "%s %s\n", nome_arquivo, ip_cliente)) != EOF){
-
-            //posicao_arquivo++;
-
-            printf("%s %s\n", nome_arquivo, ip_cliente);
-
-            //atualiza a linha do arquivo no banco de dados
-            if((strcmp(nome_arquivo, blk.nome_arquivo))== 0){
-                
-                break;
-                //strcpy(ip_cliente, blk.porta_cliente);
-                //fprintf(banco_de_dados_aux, "%s %d\n", nome_arquivo, blk.porta_cliente);
-            }else{
-                //fprintf(banco_de_dados_aux, "%s %s\n", nome_arquivo, ip_cliente);
-            }
-                
-        }
-
-        
+        //limpa os buffers do arquivo
         fflush(banco_de_dados);
-        /*
-        //move o arquivo para a linha onde está o nome do arquivo
-        fseek(banco_de_dados, posicao_arquivo, SEEK_SET);
-
-        printf("%s %d %d\n", blk.nome_arquivo, blk.porta_cliente, posicao_arquivo);
         
-        //reescreve a linha com a porta atualizada do cliente A
-        //fprintf(banco_de_dados, "%s %d\n", blk.nome_arquivo, blk.porta_cliente);
-        
-        fwrite(&blk, 1, sizeof(blk), banco_de_dados);
-
-        fflush(banco_de_dados); 
-
         printf("\nBanco de dados atualizado com sucesso!\n");
         fclose(banco_de_dados);
-        */
+        
         break;
     }
 }
